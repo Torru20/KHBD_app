@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tạo File Word - PWA</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#ffffff">
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.9/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    function App() {
+      const [title, setTitle] = React.useState(localStorage.getItem('title') || '');
+      const [paragraphs, setParagraphs] = React.useState(JSON.parse(localStorage.getItem('paragraphs')) || ['']);
+      const [listItems, setListItems] = React.useState(JSON.parse(localStorage.getItem('listItems')) || ['']);
+      const [isOffline, setIsOffline] = React.useState(!navigator.onLine);
+      const [selectedTopic, setSelectedTopic] = React.useState(localStorage.getItem('selectedTopic') || '');
+      const [suggestions, setSuggestions] = React.useState('');
+
+      // Gợi ý phương pháp giảng dạy dựa trên chủ đề
+      const topicSuggestions = {
+        'Kiến thức cơ bản về máy tính': 'Phương pháp: Dạy trực quan với mô hình máy tính thực tế. Hoạt động: Học sinh lắp ráp mô hình phần cứng. Scratch: Tạo animation giới thiệu CPU.',
+        'Hệ điều hành': 'Phương pháp: Thảo luận nhóm về giao diện Windows. Hoạt động: Thực hành tạo thư mục, đổi tên file. Scratch: Tạo game đơn giản mô phỏng thao tác file.',
+        'Mạng máy tính và Internet': 'Phương pháp: Bài giảng tương tác về giao thức TCP/IP. Hoạt động: Thực hành tìm kiếm an toàn trên Google. Scratch: Tạo dự án mô phỏng mạng xã hội.',
+        'Ứng dụng văn phòng': 'Phương pháp: Học qua dự án, tạo báo cáo Word. Hoạt động: Thiết kế slide PowerPoint. Scratch: Tạo animation hướng dẫn sử dụng Word.',
+        'Lập trình cơ bản': 'Phương pháp: Học qua thực hành với Scratch. Hoạt động: Viết chương trình tính toán đơn giản. Scratch: Tạo game di chuyển nhân vật.',
+        'Giải quyết vấn đề với công nghệ': 'Phương pháp: Dạy theo tình huống thực tế. Hoạt động: Phân tích vấn đề và lập kế hoạch giải quyết. Scratch: Tạo dự án mô phỏng quy trình.',
+        'An toàn thông tin': 'Phương pháp: Thảo luận về mật khẩu an toàn. Hoạt động: Thực hành cài đặt tường lửa. Scratch: Tạo game về nhận diện phishing.'
+      };
+
+      // Cập nhật gợi ý khi chọn chủ đề
+      React.useEffect(() => {
+        if (selectedTopic) {
+          setSuggestions(topicSuggestions[selectedTopic] || '');
+          setTitle(`KHBD: ${selectedTopic}`);
+        } else {
+          setSuggestions('');
+        }
+        localStorage.setItem('selectedTopic', selectedTopic);
+      }, [selectedTopic]);
+
+      // Lưu dữ liệu vào localStorage
+      React.useEffect(() => {
+        localStorage.setItem('title', title);
+        localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
+        localStorage.setItem('listItems', JSON.stringify(listItems));
+      }, [title, paragraphs, listItems]);
+
+      // Kiểm tra trạng thái online/offline
+      React.useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+        };
+      }, []);
+
+      const addParagraph = () => setParagraphs([...paragraphs, '']);
+      const updateParagraph = (index, value) => {
+        const newParagraphs = [...paragraphs];
+        newParagraphs[index] = value;
+        setParagraphs(newParagraphs);
+      };
+      const addListItem = () => setListItems([...listItems, '']);
+      const updateListItem = (index, value) => {
+        const newListItems = [...listItems];
+        newListItems[index] = value;
+        setListItems(newListItems);
+      };
+
+      const generateWord = () => {
+        const doc = new docx.Document({
+          sections: [
+            {
+              children: [
+                new docx.Paragraph({
+                  text: title,
+                  heading: docx.HeadingLevel.HEADING_1,
+                  alignment: docx.AlignmentType.CENTER,
+                }),
+                new docx.Paragraph({
+                  text: 'Gợi ý phương pháp giảng dạy',
+                  heading: docx.HeadingLevel.HEADING_2,
+                }),
+                new docx.Paragraph({
+                  text: suggestions,
+                  spacing: { after: 200 },
+                }),
+                ...paragraphs.filter(p => p.trim() !== '').map(p => 
+                  new docx.Paragraph({ text: p, spacing: { after: 200 } })
+                ),
+                ...listItems.filter(item => item.trim() !== '').map(item => 
+                  new docx.Paragraph({ text: item, bullet: { level: 0 }, spacing: { after: 100 } })
+                ),
+              ],
+            },
+          ],
+        });
+        docx.Packer.toBlob(doc).then(blob => saveAs(blob, 'document.docx'));
+      };
+
+      return (
+        <div className="container mx-auto p-4 max-w-2xl">
+          <h1 className="text-2xl font-bold mb-4 text-center">Tạo Kế Hoạch Bài Dạy Tin học - PWA</h1>
+          {isOffline && (
+            <div className="bg-yellow-100 p-2 mb-4 text-center text-yellow-800">
+              Đang ở chế độ offline. Dữ liệu được lưu cục bộ và file Word có thể tạo mà không cần internet. Scratch iframe không khả dụng offline.
+            </div>
+          )}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Chọn chủ đề Tin học GDPT 2018</label>
+            <select
+              value={selectedTopic}
+              onChange={(e) => setSelectedTopic(e.target.value)}
+              className="mt-1 p-2 w-full border rounded-md"
+            >
+              <option value="">Chọn chủ đề...</option>
+              <option value="Kiến thức cơ bản về máy tính">Kiến thức cơ bản về máy tính</option>
+              <option value="Hệ điều hành">Hệ điều hành</option>
+              <option value="Mạng máy tính và Internet">Mạng máy tính và Internet</option>
+              <option value="Ứng dụng văn phòng">Ứng dụng văn phòng</option>
+              <option value="Lập trình cơ bản">Lập trình cơ bản</option>
+              <option value="Giải quyết vấn đề với công nghệ">Giải quyết vấn đề với công nghệ</option>
+              <option value="An toàn thông tin">An toàn thông tin</option>
+            </select>
+          </div>
+          {suggestions && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700">Gợi ý phương pháp giảng dạy</label>
+              <textarea
+                value={suggestions}
+                readOnly
+                className="mt-1 p-2 w-full border rounded-md bg-gray-100"
+                rows="4"
+              />
+            </div>
+          )}
+          {!isOffline && selectedTopic === 'Lập trình cơ bản' && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700">Xem trước Scratch (Lập trình cơ bản)</label>
+              <iframe
+                src="https://scratch.mit.edu/projects/123456789/embed"
+                allowTransparency="true"
+                width="100%"
+                height="400"
+                frameBorder="0"
+                scrolling="no"
+                className="border rounded-md"
+              ></iframe>
+              <p className="text-sm text-gray-500 mt-2">Ví dụ dự án Scratch: Game di chuyển nhân vật.</p>
+            </div>
+          )}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Tiêu đề</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-1 p-2 w-full border rounded-md"
+              placeholder="Nhập tiêu đề..."
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Đoạn văn</label>
+            {paragraphs.map((para, index) => (
+              <textarea
+                key={index}
+                value={para}
+                onChange={(e) => updateParagraph(index, e.target.value)}
+                className="mt-1 p-2 w-full border rounded-md mb-2"
+                placeholder={`Đoạn văn ${index + 1}...`}
+                rows="4"
+              />
+            ))}
+            <button onClick={addParagraph} className="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md">Thêm đoạn văn</button>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Danh sách</label>
+            {listItems.map((item, index) => (
+              <input
+                key={index}
+                type="text"
+                value={item}
+                onChange={(e) => updateListItem(index, e.target.value)}
+                className="mt-1 p-2 w-full border rounded-md mb-2"
+                placeholder={`Mục ${index + 1}...`}
+              />
+            ))}
+            <button onClick={addListItem} className="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md">Thêm mục danh sách</button>
+          </div>
+          <button onClick={generateWord} className="w-full bg-green-500 text-white px-4 py-2 rounded-md">Tạo và Tải File Word</button>
+        </div>
+      );
+    }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+  <script>
+    // Đăng ký Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
